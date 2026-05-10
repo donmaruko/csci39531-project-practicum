@@ -29,7 +29,7 @@ Response fields
   _embedded.venues[0].capacity                venue capacity
   _embedded.attractions[0]                    headliner
   _embedded.attractions[1:]                   support acts
-  _embedded.attractsions[].name                attraction name (headliner + support)
+  _embedded.attractions[].name                 attraction name (headliner + support)
   _embedded.attractions[0].externalLinks      headliner social/web links
 """
 import requests
@@ -63,7 +63,7 @@ def _artist_matches(raw, artist):
     attractions = raw.get("_embedded", {}).get("attractions", [])
     return any(artist_lower in a.get("name", "").lower() for a in attractions)
 
-def GetEvents(artist, location):
+def get_events(artist, location):
     """
     @param artist: artist name to search for on Ticketmaster
     @param location: user-provided location string (city, borough, or metro area)

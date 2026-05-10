@@ -6,15 +6,15 @@ import time
 from datetime import datetime, timezone
 
 from config import ALERT_EMAIL, SCRIPT_DIR
-from ticketmaster import GetEvents
-from alerts import SendEmailAlert
-from cli import Daemonize, ParseArgs, ArtistSlug
+from ticketmaster import get_events
+from alerts import send_email_alert
+from cli import daemonize, parse_args, artist_slug
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
 log = logging.getLogger(__name__)
 
 
-def FsmState(path, state=None):
+def fsm_state(path, state=None):
     """
     @param path: file path to the JSON state file
     @param state: dict to save; if None, loads and returns existing state instead
@@ -24,7 +24,7 @@ def FsmState(path, state=None):
         return json.load(open(path)) if os.path.exists(path) else {}
     json.dump(state, open(path, "w"), indent=2)
 
-def FsmTransition(prev_status, curr_status):
+def fsm_transition(prev_status, curr_status):
     """
     @param prev_status: the event's last known status; None if never seen before
     @param curr_status: the event's current status fetched from Ticketmaster
@@ -38,7 +38,7 @@ def FsmTransition(prev_status, curr_status):
         return "presale_alert"
     return "monitoring"
 
-def RunCycle(artist, location, fsm_states, state_file, alert_email):
+def run_cycle(artist, location, fsm_states, state_file, alert_email):
     """
     @param artist: artist name string
     @param location: user-provided location string
@@ -49,7 +49,7 @@ def RunCycle(artist, location, fsm_states, state_file, alert_email):
     @post: fires an email alert per event that transitions to on-sale or presale,
            and saves FSM state to disk
     """
-    events = GetEvents(artist, location)
+    events = get_events(artist, location)
 
     if not events:
         log.info("no upcoming events found for %r in %r", artist, location)
@@ -59,31 +59,31 @@ def RunCycle(artist, location, fsm_states, state_file, alert_email):
         log.info("found %r at %s on %s", event["name"], event["venue"], event["date"])
         prev_status = fsm_states.get(event["id"], "unknown")
         curr_status = event["effective_status"]
-        state = FsmTransition(prev_status, curr_status)
+        state = fsm_transition(prev_status, curr_status)
 
         if state in ("alert_triggered", "presale_alert"):
-            SendEmailAlert(event, alert_email)
+            send_email_alert(event, alert_email)
             log.info("%s — %s @ %s on %s", state, event["name"], event["venue"], event["date"])
 
         fsm_states[event["id"]] = curr_status
 
-    FsmState(state_file, fsm_states)
+    fsm_state(state_file, fsm_states)
     return fsm_states, events
 
-def Main():
+def main():
     """
     @post: parses args; if not detached, relaunches as background process and exits;
            if detached, writes a PID file, loads FSM state, and runs
            RunCycle on an adaptive timed loop; PID file is removed on exit
     """
-    args = ParseArgs()
+    args = parse_args()
     alert_email = args.email or ALERT_EMAIL
 
-    slug = ArtistSlug(args.artist, args.location)
+    slug = artist_slug(args.artist, args.location)
     state_file = os.path.join(SCRIPT_DIR, f"fsm_state_{slug}.json")
 
     if not args.detached:
-        pid = Daemonize(args, alert_email)
+        pid = daemonize(args, alert_email)
         print(f"Bot running in background — monitoring '{args.artist}' in {args.location}. Logs: bandgeek.log")
         print(f"PID for '{args.artist}': {pid}")
         print(f"To kill daemon --> pkill -f bandgeek.py")
@@ -105,12 +105,12 @@ def Main():
 
     log.info("started — artist=%r location=%r interval=%ds", args.artist, args.location, args.interval)
 
-    fsm_states = FsmState(state_file)
+    fsm_states = fsm_state(state_file)
 
     try:
         while True:
             try:
-                fsm_states, events = RunCycle(
+                fsm_states, events = run_cycle(
                     args.artist, args.location, fsm_states, state_file, alert_email,
                 )
             except Exception as e:
@@ -136,4 +136,4 @@ def Main():
             os.remove(pid_file)
 
 if __name__ == "__main__":
-    Main()
+    main()

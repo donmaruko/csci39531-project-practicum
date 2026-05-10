@@ -4,9 +4,9 @@ from email.message import EmailMessage
 from config import SMTP_FROM, SMTP_PASSWORD, SMTP_HOST, SMTP_PORT
 
 
-def BuildEmailBody(event):
+def build_email_body(event):
     """
-    @param event: normalized event dict from ExtractEvent
+    @param event: normalized event dict from _extract_event
     @return: formatted plain text email body string
     """
     is_presale = event["effective_status"] == "presale"
@@ -38,9 +38,9 @@ def BuildEmailBody(event):
     return "\n".join(lines)
 
 
-def SendEmailAlert(event, recipient):
+def send_email_alert(event, recipient):
     """
-    @param event: normalized event dict from ExtractEvent
+    @param event: normalized event dict from _extract_event
     @param recipient: destination email address string
     @pre: SMTP_FROM, SMTP_PASSWORD, SMTP_HOST, SMTP_PORT are set in the environment
     @post: sends an on sale or presale alert email to recipient via SMTP_SSL,
@@ -55,7 +55,7 @@ def SendEmailAlert(event, recipient):
     msg["Subject"] = f"{prefix}: {event['name']} — {event['date']} @ {event['venue']}"
     msg["From"] = SMTP_FROM
     msg["To"] = recipient
-    msg.set_content(BuildEmailBody(event))
+    msg.set_content(build_email_body(event))
 
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
         smtp.login(SMTP_FROM, SMTP_PASSWORD)

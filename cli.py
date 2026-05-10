@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 
-def Daemonize(args, alert_email):
+def daemonize(args, alert_email):
     """
     @param args: parsed argparse.Namespace with artist, location, interval
     @param alert_email: resolved recipient email address string
@@ -32,7 +32,7 @@ def Daemonize(args, alert_email):
     )
     return proc.pid
 
-def ParseArgs():
+def parse_args():
     """
     @return: argparse.Namespace with fields artist, location, interval, email, detached
     @post: if --artist is not passed as a CLI flag, prompts the user interactively for all fields;
@@ -67,7 +67,7 @@ def ParseArgs():
     args.interval = args.interval or 60
     return args
 
-def ArtistSlug(artist, location):
+def artist_slug(artist, location):
     """
     @param artist: raw artist name string
     @param location: user-provided city string
