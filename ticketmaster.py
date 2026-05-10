@@ -26,7 +26,6 @@ Response fields
   _embedded.venues[0].city.name               venue city
   _embedded.venues[0].state.name              venue state
   _embedded.venues[0].address.line1           venue street address
-  _embedded.venues[0].capacity                venue capacity
   _embedded.attractions[0]                    headliner
   _embedded.attractions[1:]                   support acts
   _embedded.attractions[].name                 attraction name (headliner + support)
@@ -127,7 +126,6 @@ def _extract_event(raw):
         ext = attractions[0].get("externalLinks", {}) if attractions else {}  # TM: attractions[0].externalLinks
         social = {k: v[0]["url"] for k, v in ext.items() if v and v[0].get("url")}
 
-        capacity = venue.get("capacity")                    # TM: venues[0].capacity
         show_timezone = raw["dates"].get("timezone")        # TM: dates.timezone
         address = venue.get("address", {}).get("line1")     # TM: venues[0].address.line1
         state = venue.get("state", {}).get("name", "")      # TM: venues[0].state.name
@@ -169,7 +167,6 @@ def _extract_event(raw):
             "price": price_str,
             "show_time": show_time,
             "support": support_acts,
-            "capacity": capacity,
             "presale_label": presale_label,
             "pub_start_dt": pub_start_dt,
             "presale_start_dt": presale_start_dt,

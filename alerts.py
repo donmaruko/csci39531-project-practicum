@@ -19,7 +19,7 @@ def build_email_body(event):
     lines += [
         f"Event:   {event['name']}",
         date_line,
-        f"Venue:   {event['venue']}, {event['city']}" + (f"  (cap. {event['capacity']:,})" if event.get("capacity") else ""),
+        f"Venue:   {event['venue']}, {event['city']}",
     ]
 
     if event.get("support"):
