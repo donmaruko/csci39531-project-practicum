@@ -29,7 +29,7 @@ Response fields
   _embedded.venues[0].capacity                venue capacity
   _embedded.attractions[0]                    headliner
   _embedded.attractions[1:]                   support acts
-  _embedded.attractions[].name                attraction name (headliner + support)
+  _embedded.attractsions[].name                attraction name (headliner + support)
   _embedded.attractions[0].externalLinks      headliner social/web links
 """
 import requests
@@ -110,7 +110,7 @@ def _extract_event(raw):
     try:
         venue = raw["_embedded"]["venues"][0]  # TM: _embedded.venues[0]
 
-        # price is optional — only present when Ticketmaster has published ticket prices
+        # price is only presented if Ticketmaster has published ticket prices, null otherwise
         p = next(iter(raw.get("priceRanges", [])), None)  # TM: priceRanges[]
         price_str = f"from {p.get('currency', '')} {p['min']:,.2f}" if p and p.get("min") is not None else None  # TM: priceRanges[].currency, priceRanges[].min
 
