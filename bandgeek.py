@@ -155,17 +155,16 @@ def main():
 
             sleep_secs = float(args.interval)
 
-            # collects all future public onsale datetimes from the returned events
-            # nested at sales.public.startDateTime
-            # only presale events have this set
+            # collects all future public onsale and presale start datetimes from returned events
+            # sleeps to whichever comes first
             pub_dates = [ev["pub_start_dt"] for ev in events if ev.get("pub_start_dt")]
-            # takes earliest onsale datetime if any exist, otherwise None
-            dt = min(pub_dates) if pub_dates else None
+            presale_dates = [ev["presale_start_dt"] for ev in events if ev.get("presale_start_dt")]
+            dt = min(pub_dates + presale_dates) if (pub_dates or presale_dates) else None
             if dt: # calculate seconds between now and the onsale time
                 remaining = (dt - datetime.now(timezone.utc)).total_seconds()
                 if remaining > 0: # if onsale time is still in the future, override the default interval and sleep until then
                     sleep_secs = remaining
-                    log.info("sleeping until on-sale (%.0fs)", remaining)
+                    log.info("sleeping until next sale event (%.0fs)", remaining)
 
             # sleeps for as long as the normal interval or targeted onsale time
             time.sleep(sleep_secs)
@@ -173,9 +172,11 @@ def main():
     except KeyboardInterrupt: # ctrl+c catcher
         pass
     finally: # runs no matter how the loop exits (ctrl+c, crash, kill)
-             # and deletes the PID file so the next run doesn't see a stale one
+        # deletes stale PID file and fsm state JSON file for the respective bot / for the whole daemon
         if os.path.exists(pid_file):
             os.remove(pid_file)
+        if os.path.exists(state_file):
+            os.remove(state_file)
 
 if __name__ == "__main__":
     main()

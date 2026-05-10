@@ -145,6 +145,15 @@ def _extract_event(raw):
         except ValueError:
             pass
 
+        presale_start_dt = None
+        try:
+            ps = raw.get("sales", {}).get("presales", [])[0]["startDateTime"]  # TM: sales.presales[0].startDateTime
+            presale_start_dt = datetime.strptime(ps[:16], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+            if presale_start_dt <= datetime.now(timezone.utc):
+                presale_start_dt = None  # presale already started, no point sleeping to it
+        except (IndexError, KeyError, ValueError):
+            pass
+
         api_status = raw["dates"]["status"]["code"]  # TM: dates.status.code
         # relabel offsale to presale so the FSM can treat it as its own state
         effective_status = "presale" if (api_status == "offsale" and presale_label) else api_status
@@ -163,6 +172,7 @@ def _extract_event(raw):
             "capacity": capacity,
             "presale_label": presale_label,
             "pub_start_dt": pub_start_dt,
+            "presale_start_dt": presale_start_dt,
             "timezone": show_timezone,
             "address": address,
             "state": state,
