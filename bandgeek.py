@@ -123,12 +123,9 @@ def Main():
             dt = min(pub_dates) if pub_dates else None
             if dt:
                 remaining = (dt - datetime.now(timezone.utc)).total_seconds()
-                if remaining > args.interval:
-                    sleep_secs = remaining - args.interval
-                    log.info("sleeping until T-%.0fs (on-sale in %.0fs)", args.interval, remaining)
-                elif 0 < remaining:
-                    sleep_secs = max(remaining, 3.0)
-                    log.info("adaptive sleep %.0fs (on-sale in %.0fs)", sleep_secs, remaining)
+                if remaining > 0:
+                    sleep_secs = remaining
+                    log.info("sleeping until on-sale (%.0fs)", remaining)
 
             time.sleep(sleep_secs)
 

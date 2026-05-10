@@ -9,8 +9,8 @@ A background daemon that monitors Ticketmaster for concert announcements and ema
 3. Each poll queries the Ticketmaster Discovery API which returns deeply nested JSON. The response is normalized to extract only what's useful — show date and time, venue info, ticket price if published, supporting acts, sale status, and a direct URL to buy tickets. Results are then filtered to only keep events where the artist appears by name (as headliner or support) and the venue matches the given location
 4. Each event is run through a state machine — if the status has changed (unknown to presale, or anything to onsale), an email alert fires
 5. If nothing has changed — no new announcements, no status transitions — the bot simply sleeps for the interval and goes back to polling indefinitely until something changes. The only time it breaks out of this cycle is when a presale is detected and a public on-sale date is known
-    - Only then would the bot sleep directly until one interval before that time instead of polling every cycle.
-    - On wake-up, the bot resumes normal polling and fires a second alert the moment general sale goes live
+    - Only then would the bot sleep directly until the exact moment general sale goes live, skipping all intermediate polling cycles entirely.
+    - On wake-up, the bot polls once and fires the second alert.
 
 ## Setup
 
