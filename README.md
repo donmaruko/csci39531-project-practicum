@@ -14,14 +14,12 @@ A background daemon that monitors Ticketmaster for concert announcements and ema
 
 ## Setup
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root with atleast these secrets:
 
 ```
 TICKETMASTER_KEY=your_ticketmaster_api_key
 SMTP_FROM=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
 ALERT_EMAIL=recipient@email.com
 ```
 
