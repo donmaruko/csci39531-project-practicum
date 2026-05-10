@@ -1,0 +1,10 @@
+.env
+*.log
+bandgeek_*.pid
+fsm_state_*.json
+history_*.csv
+debug_raw_*.json
+debug_extracted_*.json
+__pycache__/
+*.pyc
+.DS_Store
