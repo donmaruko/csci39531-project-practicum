@@ -9,6 +9,7 @@ def daemonize(args, alert_email):
     """
     @param args: parsed argparse.Namespace with artist, location, interval
     @param alert_email: resolved recipient email address string
+    @return: PID of the spawned background process
     @post: relaunches this script with --detached and all resolved args as a background process,
            writing stdout and stderr to bandgeek.log
     """

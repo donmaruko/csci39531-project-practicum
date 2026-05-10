@@ -134,13 +134,16 @@ def _extract_event(raw):
 
         # presale detection via Ticketmaster marking presale events as offsale, so the only way to
         # distinguish them is a future public on-sale date in sales.public.startDateTime
-        pub_start_raw = raw.get("sales", {}).get("public", {}).get("startDateTime", "")  # TM: sales.public.startDateTime
+        pub_start_raw = raw.get("sales", {}).get("public", {}).get("startDateTime") or ""  # TM: sales.public.startDateTime
         presale_label = None
         pub_start_dt = None
-        if pub_start_raw and len(pub_start_raw) >= 16:
-            if pub_start_raw[:10] > datetime.now(timezone.utc).strftime("%Y-%m-%d"):
-                presale_label = datetime.strptime(pub_start_raw[:16], "%Y-%m-%dT%H:%M").strftime("%b %d, %Y")
-                pub_start_dt = datetime.strptime(pub_start_raw[:16], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+        try:
+            pub_dt = datetime.strptime(pub_start_raw[:16], "%Y-%m-%dT%H:%M")
+            if pub_dt.date() > datetime.now(timezone.utc).date():
+                presale_label = pub_dt.strftime("%b %d, %Y")
+                pub_start_dt = pub_dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
 
         api_status = raw["dates"]["status"]["code"]  # TM: dates.status.code
         # relabel offsale to presale so the FSM can treat it as its own state
