@@ -106,6 +106,21 @@ def main():
     # once daemonize is called, parent exits and child daemon continues with --detached as True
     # so it skips this block entirely on its re-launch
     if not args.detached:
+        # validation poll before daemonizing
+        # runs in the parent process while user is still at the terminal
+        # so if the location is wrong or no events exist, user sees it before the daemon launches
+        print(f"Checking Ticketmaster for '{args.artist}' in '{args.location}'")
+        test_events = get_events(args.artist, args.location)
+
+        if not test_events:
+            # no events found -> could be a typo, wrong city, or artist not yet announced
+            print(f"Warning: no events found for '{args.artist}' in '{args.location}'.")
+            print("This could mean the location is incorrect or no shows are announced yet.")
+            confirm = input("Start bot anyway? (y/n): ").strip().lower()
+            if confirm != "y":
+                # user chose not to continue
+                sys.exit(0)
+
         pid = daemonize(args, alert_email)
         print(f"Bot running in background — monitoring '{args.artist}' in {args.location}. Logs: bandgeek.log")
         print(f"PID for '{args.artist}': {pid}")
