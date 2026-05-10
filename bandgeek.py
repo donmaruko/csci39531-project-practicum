@@ -14,14 +14,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 
-def fsm_state(path, state=None):
+def load_fsm_state(path):
     """
     @param path: file path to the JSON state file
-    @param state: dict to save; if None, loads and returns existing state instead
     @return: dict mapping event IDs to their last known status, or {} if no file exists
     """
-    if state is None:
-        return json.load(open(path)) if os.path.exists(path) else {}
+    return json.load(open(path)) if os.path.exists(path) else {}
+
+def save_fsm_state(path, state):
+    """
+    @param path: file path to the JSON state file
+    @param state: dict mapping event IDs to their last known status
+    @post: writes state to path as formatted JSON
+    """
     json.dump(state, open(path, "w"), indent=2)
 
 def fsm_transition(prev_status, curr_status):
@@ -67,7 +72,7 @@ def run_cycle(artist, location, fsm_states, state_file, alert_email):
 
         fsm_states[event["id"]] = curr_status
 
-    fsm_state(state_file, fsm_states)
+    save_fsm_state(state_file, fsm_states)
     return fsm_states, events
 
 def main():
@@ -105,7 +110,7 @@ def main():
 
     log.info("started — artist=%r location=%r interval=%ds", args.artist, args.location, args.interval)
 
-    fsm_states = fsm_state(state_file)
+    fsm_states = load_fsm_state(state_file)
 
     try:
         while True:

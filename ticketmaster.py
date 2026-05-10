@@ -32,10 +32,13 @@ Response fields
   _embedded.attractions[].name                 attraction name (headliner + support)
   _embedded.attractions[0].externalLinks      headliner social/web links
 """
+import logging
 import requests
 from datetime import datetime, timezone
 
 from config import TICKETMASTER_KEY
+
+log = logging.getLogger(__name__)
 
 
 
@@ -162,5 +165,6 @@ def _extract_event(raw):
             "state": state,
             "social": social,
         }
-    except (KeyError, IndexError):
+    except (KeyError, IndexError) as e:
+        log.warning("failed to extract event (skipping): %s | raw id=%s", e, raw.get("id"))
         return None
