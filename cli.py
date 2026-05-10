@@ -1,8 +1,8 @@
 import argparse
 import os
 import re
-import subprocess
-import sys
+import subprocess # daemonize
+import sys        # child uses same Python interpreter as parent
 
 
 def daemonize(args, alert_email):
@@ -14,22 +14,26 @@ def daemonize(args, alert_email):
            writing stdout and stderr to bandgeek.log
     """
     cmd = [
-        sys.executable, os.path.abspath(sys.argv[0]),
+        # sys.executable -> python interpreter
+        # sys.argv       -> list of everything typed on command line when the script is launched
+        #                   ["bandgeek.py", "--artist", "Geese", "--location", "New York"]
+        sys.executable, os.path.abspath(sys.argv[0]), # gets abs path to the current script for Popen
         "--artist", args.artist,
         "--location", args.location,
         "--interval", str(args.interval),
         "--detached",
-    ]
+    ] # cmd -> python3 bandgeek.py --artist "" --location "" --interval 60 --detached
+
     if alert_email:
         cmd += ["--email", alert_email]
 
     logfile = open("bandgeek.log", "a")
-    proc = subprocess.Popen(
+    proc = subprocess.Popen( # spawns a new child process, giving it a command as the list cmd
         cmd,
-        stdout=logfile,
-        stderr=logfile,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,
+        stdout=logfile,           # logging
+        stderr=logfile,           # logging
+        stdin=subprocess.DEVNULL, # disconnects stdin so daemon can't read from the terminal
+        start_new_session=True,   # detach child from terminal session
     )
     return proc.pid
 
@@ -45,8 +49,9 @@ def parse_args():
     parser.add_argument("--location", default=None)
     parser.add_argument("--interval", default=None, type=int)
     parser.add_argument("--email", default=None)
-    parser.add_argument("--detached", action="store_true", default=False)
+    parser.add_argument("--detached", action="store_true", default=False) # present = True, absent = False
     args = parser.parse_args()
+    # scans sys.argv and maps each --flag value pair to the corresponding attribute on the args object
 
     if args.artist is None:
         while not args.artist:
@@ -62,10 +67,13 @@ def parse_args():
         email_raw = input("  Alert email    : (press Enter to skip) ").strip()
         args.email = email_raw if email_raw else None
 
+    # when bot relaunched by Popen with --detached, --location is included
+    # but if someone runs bandgeek.py directly from the terminal with flags but forgets location
+    # this catches it and exits with an error message
     if not args.location and not args.detached:
         raise SystemExit("Error: --location is required")
 
-    args.interval = args.interval or 60
+    args.interval = args.interval or 60 # 60 is default if not provided input
     return args
 
 def artist_slug(artist, location):
@@ -73,5 +81,13 @@ def artist_slug(artist, location):
     @param artist: raw artist name string
     @param location: user-provided city string
     @return: lowercase alphanumeric slug combining artist and location, with special characters replaced by underscores
+
+    artist and location input       -> "Black Country, New Road" + "New York"
+    f"{artist}_{location}           -> "Black Country, New Road_New York"
+    .lower()                        -> "black country, new road_new york"
+    re.sub(r'[^a-z0-9]+', '_', ...) -> "black_country_new_road_new_york"
+        comma+space , is not alphanumeric so it becomes _, the space in new road and new york becomes _
+    .strip('_')                     -> "black_country_new_road_new_york"
+        remove leading or trailing underscores if they exist
     """
     return re.sub(r'[^a-z0-9]+', '_', f"{artist}_{location}".lower()).strip('_')

@@ -71,7 +71,7 @@ def get_events(artist, location):
     @param artist: artist name to search for on Ticketmaster
     @param location: user-provided location string (city, borough, or metro area)
     @pre: TICKETMASTER_KEY is set in the environment
-    @return: list of upcoming normalized event dicts matching artist and location, sorted by date
+    @return: list of upcoming normalized event dicts matching artist and location, sorted by date (up to 50)
     @throw: requests.HTTPError if the API returns a non-2xx status
     """
     now = datetime.now(timezone.utc)

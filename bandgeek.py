@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import signal
 import sys
 import time
 from datetime import datetime, timezone
@@ -41,7 +42,7 @@ def fsm_transition(prev_status, curr_status):
         return "alert_triggered"
     if curr_status == "presale" and prev_status not in ("presale", "onsale"):
         return "presale_alert"
-    return "monitoring"
+    return "monitoring" # to offsale / to cancelled / presale to presale / onsale to onsale
 
 def run_cycle(artist, location, fsm_states, state_file, alert_email):
     """
@@ -54,7 +55,7 @@ def run_cycle(artist, location, fsm_states, state_file, alert_email):
     @post: fires an email alert per event that transitions to on-sale or presale,
            and saves FSM state to disk
     """
-    events = get_events(artist, location)
+    events = get_events(artist, location) # get up to 50 future gigs of an artist
 
     if not events:
         log.info("no upcoming events found for %r in %r", artist, location)
@@ -62,17 +63,28 @@ def run_cycle(artist, location, fsm_states, state_file, alert_email):
 
     for event in events:
         log.info("found %r at %s on %s", event["name"], event["venue"], event["date"])
-        prev_status = fsm_states.get(event["id"], "unknown")
-        curr_status = event["effective_status"]
+        prev_status = fsm_states.get(event["id"], "unknown") # any event ID not yet in JSON state file defaults to unknown
+        curr_status = event["effective_status"] # fetch current status of the event
         state = fsm_transition(prev_status, curr_status)
 
+        """
+        unknown -> onsale
+        unknown -> presale
+        offsale -> onsale
+        offsale -> presale
+        presale -> onsale
+        """
         if state in ("alert_triggered", "presale_alert"):
             send_email_alert(event, alert_email)
             log.info("%s — %s @ %s on %s", state, event["name"], event["venue"], event["date"])
 
+        # after processing every event in the loop, update in-memory dict with event's current status
+        # so the next poll compaers against the latest known state
         fsm_states[event["id"]] = curr_status
 
+    # persists the entire updated dict to the JSON file on disk so state survives between runs
     save_fsm_state(state_file, fsm_states)
+    # returns updated fsm_states and event list back to main() for the sleep logic
     return fsm_states, events
 
 def main():
@@ -86,7 +98,13 @@ def main():
 
     slug = artist_slug(args.artist, args.location)
     state_file = os.path.join(SCRIPT_DIR, f"fsm_state_{slug}.json")
+    # SCRIPT_DIR = abs path to the dir where project files live
+    # fsm state json will always be saved there
 
+    # when user runs bandgeek.py from the terminal without --detached
+    # first run has no --detached so args.detached = False / not args.detached = True
+    # once daemonize is called, parent exits and child daemon continues with --detached as True
+    # so it skips this block entirely on its re-launch
     if not args.detached:
         pid = daemonize(args, alert_email)
         print(f"Bot running in background — monitoring '{args.artist}' in {args.location}. Logs: bandgeek.log")
@@ -94,49 +112,68 @@ def main():
         print(f"To kill daemon --> pkill -f bandgeek.py")
         sys.exit(0)
 
-    pid_file = os.path.join(SCRIPT_DIR, f"bandgeek_{slug}.pid")
-    if os.path.exists(pid_file):
+    # prevent duplicate daemons (if you run bandgeek on the same artist+locatoin pair twice)
+    # second one checks the PID file, sees the first one is still alive, then exits
+    pid_file = os.path.join(SCRIPT_DIR, f"bandgeek_{slug}.pid") # path to PID file for this slug
+    if os.path.exists(pid_file): # does a PID file exist for this slug?
         with open(pid_file) as pf:
-            existing_pid = int(pf.read().strip())
+            existing_pid = int(pf.read().strip()) # read PID from it
         try:
-            os.kill(existing_pid, 0)
-            log.error("already running as PID %d — exiting", existing_pid)
+            os.kill(existing_pid, 0) # nothing actually gets killed, just checking to see if its still alive
+            log.error("already running as PID %d — exiting", existing_pid) # if it is alive, logs an error and exits (daemon already running)
             sys.exit(1)
-        except ProcessLookupError:
-            pass  # stale PID file from a previous crash
+        except ProcessLookupError: # process doesn't exist, PID file is stale from a previous crash
+            pass                   # so it falls thru and continues with a fresh start
 
+    # daemon writes its own PID to the file after passing the dupe check
+    # os.getpid() gets the current process' PID and writes it as a string to the slug PID file
+    # so the next run can find it and check if it's still alive
     with open(pid_file, "w") as pf:
         pf.write(str(os.getpid()))
 
+    # logs progress to bandgeek.log
     log.info("started — artist=%r location=%r interval=%ds", args.artist, args.location, args.interval)
-
+    # load persisted FSM state from disk or start fresh if it's a new run
     fsm_states = load_fsm_state(state_file)
 
+    # make SIGTERM (kill {pid}) trigger finally block for PID file cleanup
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
+    # main loop
     try:
-        while True:
+        while True: # infinite polling loop
             try:
-                fsm_states, events = run_cycle(
+                # inner try runs one poll cycle, gets events, checks FSM transitions, 
+                # fires alerts, returns updated state and event list
+                fsm_states, events = run_cycle( 
                     args.artist, args.location, fsm_states, state_file, alert_email,
                 )
-            except Exception as e:
+            except Exception as e: # logs a warning and sleeps for one interval before retrying
                 log.warning("cycle error: %s", e)
                 time.sleep(args.interval)
                 continue
 
             sleep_secs = float(args.interval)
+
+            # collects all future public onsale datetimes from the returned events
+            # nested at sales.public.startDateTime
+            # only presale events have this set
             pub_dates = [ev["pub_start_dt"] for ev in events if ev.get("pub_start_dt")]
+            # takes earliest onsale datetime if any exist, otherwise None
             dt = min(pub_dates) if pub_dates else None
-            if dt:
+            if dt: # calculate seconds between now and the onsale time
                 remaining = (dt - datetime.now(timezone.utc)).total_seconds()
-                if remaining > 0:
+                if remaining > 0: # if onsale time is still in the future, override the default interval and sleep until then
                     sleep_secs = remaining
                     log.info("sleeping until on-sale (%.0fs)", remaining)
 
+            # sleeps for as long as the normal interval or targeted onsale time
             time.sleep(sleep_secs)
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt: # ctrl+c catcher
         pass
-    finally:
+    finally: # runs no matter how the loop exits (ctrl+c, crash, kill)
+             # and deletes the PID file so the next run doesn't see a stale one
         if os.path.exists(pid_file):
             os.remove(pid_file)
 
