@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import sys
 
 import requests
 
@@ -9,15 +8,10 @@ from config import SCRIPT_DIR, TICKETMASTER_KEY
 from ticketmaster import _extract_event
 
 if __name__ == "__main__":
-    artist = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else input("Artist: ").strip()
+    artist = input("Artist: ").strip()
     slug = re.sub(r'[^a-z0-9]+', '_', artist.lower()).strip('_')
 
-    while True:
-        raw = input("Number of events to fetch (1-10): ").strip()
-        if raw.isdigit() and 1 <= int(raw) <= 10:
-            size = int(raw)
-            break
-        print("  Enter a number between 1 and 10.")
+    size = int(input("Number of events to fetch: ").strip())
 
     resp = requests.get(
         "https://app.ticketmaster.com/discovery/v2/events",
