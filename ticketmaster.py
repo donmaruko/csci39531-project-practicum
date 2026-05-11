@@ -58,11 +58,24 @@ def _city_matches(event, location):
     @param event: normalized event dict from _extract_event
     @param location: user-provided city string
     @return: True if location matches the event's city or state (case-insensitive substring check)
+
+    Inputted location : "New York"
+    City of Event     : "Brooklyn"
+    State of Event    : "New York"
+    branch 1 -> location_lower in city -> "new york" in "brooklyn" False
+    branch 2 -> city in location_lower -> "brooklyn" in "new york" False
+    branch 3 -> state and (location_lower in state or state in location_lower)
+             -> "new york" and ("new york" in "new york" or "new york" in "new york")
+                                          True                        True
+             -> True
     """
     location_lower = location.lower()
     city = event["city"].lower()
     state = event.get("state", "").lower()
-    return location_lower in city or city in location_lower or (state and (location_lower in state or state in location_lower))
+    return (
+        (location_lower in city or city in location_lower)
+        or (state and (location_lower in state or state in location_lower))
+    )
 
 def _artist_matches(raw, artist):
     """
@@ -105,9 +118,11 @@ def get_events(artist, location):
         event for raw in raw_events
         if _artist_matches(raw, artist)
         for event in [_extract_event(raw)]
+        # if event isnt None, and _city_matches returns True, and event date is today or in the future
+        # then this event makes it to the final list to accommodate for multiple concerts (same artist same location)
         if event and _city_matches(event, location) and event["date"] >= today
     ]
-    events.sort(key=lambda event: event["date"])
+    events.sort(key=lambda event: event["date"]) # sort them by date
     return events
 
 def _extract_event(raw):
