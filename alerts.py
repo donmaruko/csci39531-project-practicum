@@ -32,8 +32,6 @@ def build_email_body(event):
         if event.get("presale_label"):
             status_line += f" + general public on sale {event['presale_label']}"
         lines.append(status_line)
-    if event.get("price"):
-        lines.append(f"Price:   {event['price']}")
     if event.get("address"):
         lines.append(f"Address: {event['address']}" + (f"  (Timezone: {event['timezone']})" if event.get("timezone") else ""))
     if event.get("social"):

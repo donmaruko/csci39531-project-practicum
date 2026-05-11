@@ -19,8 +19,6 @@ Response fields
   dates.timezone                              show timezone
   dates.status.code                           sale status (onsale, offsale, …)
   sales.public.startDateTime                  public on-sale window open
-  priceRanges[].currency                      ticket currency
-  priceRanges[].min                           minimum ticket price
   _embedded.events[]                          event result list
   _embedded.venues[0].name                    venue name
   _embedded.venues[0].city.name               venue city
@@ -112,10 +110,6 @@ def _extract_event(raw):
     try:
         venue = raw["_embedded"]["venues"][0]  # TM: _embedded.venues[0]
 
-        # price is only presented if Ticketmaster has published ticket prices, null otherwise
-        p = next(iter(raw.get("priceRanges", [])), None)  # TM: priceRanges[]
-        price_str = f"from {p.get('currency', '')} {p['min']:,.2f}" if p and p.get("min") is not None else None  # TM: priceRanges[].currency, priceRanges[].min
-
         show_time = raw["dates"]["start"].get("localTime")  # TM: dates.start.localTime
 
         # attractions[0] is the headliner, everything after is support
@@ -164,7 +158,6 @@ def _extract_event(raw):
             "venue": venue["name"],                       # TM: venues[0].name
             "city": venue["city"]["name"],                # TM: venues[0].city.name
             "url": raw["url"],                            # TM: url
-            "price": price_str,
             "show_time": show_time,
             "support": support_acts,
             "presale_label": presale_label,
