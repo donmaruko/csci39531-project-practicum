@@ -172,8 +172,8 @@ def main():
 
             # collects all future public onsale and presale start datetimes from returned events
             # sleeps to whichever comes first
-            pub_dates = [ev["pub_start_dt"] for ev in events if ev.get("pub_start_dt")]
-            presale_dates = [ev["presale_start_dt"] for ev in events if ev.get("presale_start_dt")]
+            pub_dates = [ev["pub_sale_dt"] for ev in events if ev.get("pub_sale_dt")]
+            presale_dates = [ev["presale_dt"] for ev in events if ev.get("presale_dt")]
             dt = min(pub_dates + presale_dates) if (pub_dates or presale_dates) else None
             if dt: # calculate seconds between now and the onsale time
                 remaining = (dt - datetime.now(timezone.utc)).total_seconds()

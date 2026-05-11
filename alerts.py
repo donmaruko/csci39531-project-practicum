@@ -25,12 +25,12 @@ def build_email_body(event):
     if event.get("support"):
         lines.append(f"Support: {', '.join(event['support'])}")
     if is_presale:
-        presale_open = event["presale_start_dt"].strftime("%b %d, %Y") if event.get("presale_start_dt") else None
+        presale_open = event["presale_dt"].strftime("%b %d, %Y") if event.get("presale_dt") else None
         status_line = "Status:  PRESALE"
         if presale_open:
             status_line += f" — presale opens {presale_open}"
-        if event.get("presale_label"):
-            status_line += f" + general public on sale {event['presale_label']}"
+        if event.get("pub_sale_label"):
+            status_line += f" + general public on sale {event['pub_sale_label']}"
         lines.append(status_line)
     if event.get("address"):
         lines.append(f"Address: {event['address']}" + (f"  (Timezone: {event['timezone']})" if event.get("timezone") else ""))

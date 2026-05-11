@@ -39,16 +39,30 @@ log = logging.getLogger(__name__)
 
 
 
+def _parse_future_dt(raw_str):
+    """
+    @param raw_str: ISO 8601 datetime string, possibly empty or malformed
+    @return: (label, dt) where label is "Mon DD, YYYY" and dt is a UTC-aware datetime,
+             or (None, None) if raw_str is absent, malformed, or not in the future
+    """
+    try:
+        sale_dt = datetime.strptime(raw_str[:16], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+        if sale_dt > datetime.now(timezone.utc):
+            return sale_dt.strftime("%b %d, %Y"), sale_dt
+    except (IndexError, KeyError, ValueError):
+        pass
+    return None, None
+
 def _city_matches(event, location):
     """
     @param event: normalized event dict from _extract_event
     @param location: user-provided city string
     @return: True if location matches the event's city or state (case-insensitive substring check)
     """
-    loc = location.lower()
+    location_lower = location.lower()
     city = event["city"].lower()
     state = event.get("state", "").lower()
-    return loc in city or city in loc or (state and (loc in state or state in loc))
+    return location_lower in city or city in location_lower or (state and (location_lower in state or state in location_lower))
 
 def _artist_matches(raw, artist):
     """
@@ -61,7 +75,7 @@ def _artist_matches(raw, artist):
     if artist_lower in raw["name"].lower():
         return True
     attractions = raw.get("_embedded", {}).get("attractions", [])
-    return any(artist_lower in a.get("name", "").lower() for a in attractions)
+    return any(artist_lower in attraction.get("name", "").lower() for attraction in attractions)
 
 def get_events(artist, location):
     """
@@ -74,7 +88,7 @@ def get_events(artist, location):
     now = datetime.now(timezone.utc)
     today = now.strftime("%Y-%m-%d")
 
-    resp = requests.get(
+    response = requests.get(
         "https://app.ticketmaster.com/discovery/v2/events",  # TM: GET /discovery/v2/events
         params={
             "keyword": artist,                                    # TM: keyword
@@ -85,24 +99,23 @@ def get_events(artist, location):
         },
         timeout=10,
     )
-    resp.raise_for_status()
-    raw_events = resp.json().get("_embedded", {}).get("events", [])  # TM: _embedded.events[]
+    response.raise_for_status()
+    raw_events = response.json().get("_embedded", {}).get("events", [])  # TM: _embedded.events[]
     events = [
-        ev for raw in raw_events
+        event for raw in raw_events
         if _artist_matches(raw, artist)
-        for ev in [_extract_event(raw)]
-        if ev and _city_matches(ev, location) and ev["date"] >= today
+        for event in [_extract_event(raw)]
+        if event and _city_matches(event, location) and event["date"] >= today
     ]
-    events.sort(key=lambda ev: ev["date"])
+    events.sort(key=lambda event: event["date"])
     return events
-
 
 def _extract_event(raw):
     """
     @param raw: a single raw event dict as returned by the Ticketmaster API
     @pre: raw is a non-empty dict representing one event with all its info
     @return: a normalized event dict with keys (id, name, date, effective_status,
-             venue, city, url, price, show_time, support, capacity, presale_label, pub_start_dt),
+             venue, city, url, price, show_time, support, capacity, pub_sale_label, pub_start_dt),
              or None if the event is missing required fields
     """
 
@@ -114,11 +127,11 @@ def _extract_event(raw):
 
         # attractions[0] is the headliner, everything after is support
         attractions = raw.get("_embedded", {}).get("attractions", [])  # TM: _embedded.attractions[]
-        support_acts = [a["name"] for a in attractions[1:] if "name" in a]  # TM: attractions[1:].name
+        support_acts = [attraction["name"] for attraction in attractions[1:] if "name" in attraction]  # TM: attractions[1:].name
 
         # social links for the headliner only
-        ext = attractions[0].get("externalLinks", {}) if attractions else {}  # TM: attractions[0].externalLinks
-        social = {k: v[0]["url"] for k, v in ext.items() if v and v[0].get("url")}
+        external_links = attractions[0].get("externalLinks", {}) if attractions else {}  # TM: attractions[0].externalLinks
+        social = {platform: links[0]["url"] for platform, links in external_links.items() if links and links[0].get("url")}
 
         show_timezone = raw["dates"].get("timezone")        # TM: dates.timezone
         address = venue.get("address", {}).get("line1")     # TM: venues[0].address.line1
@@ -127,28 +140,15 @@ def _extract_event(raw):
         # presale detection via Ticketmaster marking presale events as offsale, so the only way to
         # distinguish them is a future public on-sale date in sales.public.startDateTime
         pub_start_raw = raw.get("sales", {}).get("public", {}).get("startDateTime") or ""  # TM: sales.public.startDateTime
-        presale_label = None
-        pub_start_dt = None
-        try:
-            pub_dt = datetime.strptime(pub_start_raw[:16], "%Y-%m-%dT%H:%M")
-            if pub_dt.date() > datetime.now(timezone.utc).date():
-                presale_label = pub_dt.strftime("%b %d, %Y")
-                pub_start_dt = pub_dt.replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
+        pub_sale_label, pub_sale_dt = _parse_future_dt(pub_start_raw)
 
-        presale_start_dt = None
-        try:
-            ps = raw.get("sales", {}).get("presales", [])[0]["startDateTime"]  # TM: sales.presales[0].startDateTime
-            presale_start_dt = datetime.strptime(ps[:16], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
-            if presale_start_dt <= datetime.now(timezone.utc):
-                presale_start_dt = None  # presale already started, no point sleeping to it
-        except (IndexError, KeyError, ValueError):
-            pass
+        presales = raw.get("sales", {}).get("presales", [])
+        presale_start_raw = presales[0].get("startDateTime", "") if presales else ""  # TM: sales.presales[0].startDateTime
+        presale_label, presale_dt = _parse_future_dt(presale_start_raw)
 
         api_status = raw["dates"]["status"]["code"]  # TM: dates.status.code
         # relabel offsale to presale so the FSM can treat it as its own state
-        effective_status = "presale" if (api_status == "offsale" and presale_label) else api_status
+        effective_status = "presale" if (api_status == "offsale" and pub_sale_label) else api_status
 
         return {
             "id": raw["id"],                              # TM: id
@@ -160,9 +160,10 @@ def _extract_event(raw):
             "url": raw["url"],                            # TM: url
             "show_time": show_time,
             "support": support_acts,
+            "pub_sale_label": pub_sale_label,
+            "pub_sale_dt": pub_sale_dt,
             "presale_label": presale_label,
-            "pub_start_dt": pub_start_dt,
-            "presale_start_dt": presale_start_dt,
+            "presale_dt": presale_dt,
             "timezone": show_timezone,
             "address": address,
             "state": state,
