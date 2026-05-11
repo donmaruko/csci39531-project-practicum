@@ -127,18 +127,12 @@ def main():
         print(f"To kill daemon --> pkill -f bandgeek.py")
         sys.exit(0)
 
-    # prevent duplicate daemons (if you run bandgeek on the same artist+locatoin pair twice)
-    # second one checks the PID file, sees the first one is still alive, then exits
-    pid_file = os.path.join(SCRIPT_DIR, f"bandgeek_{slug}.pid") # path to PID file for this slug
-    if os.path.exists(pid_file): # does a PID file exist for this slug?
-        with open(pid_file) as pf:
-            existing_pid = int(pf.read().strip()) # read PID from it
-        try:
-            os.kill(existing_pid, 0) # nothing actually gets killed, just checking to see if its still alive
-            log.error("already running as PID %d — exiting", existing_pid) # if it is alive, logs an error and exits (daemon already running)
-            sys.exit(1)
-        except ProcessLookupError: # process doesn't exist, PID file is stale from a previous crash
-            pass                   # so it falls thru and continues with a fresh start
+    # prevent duplicate daemons (if you run bandgeek on the same artist+location pair twice)
+    # second one checks the PID file, sees one already exists, then exits
+    pid_file = os.path.join(SCRIPT_DIR, f"bandgeek_{slug}.pid") # current daemon: "is there a matching pid file as mine?"
+    if os.path.exists(pid_file):                                 # if so
+        log.error("already running — exiting")
+        sys.exit(1)                                              # exit program before becoming a daemon
 
     # daemon writes its own PID to the file after passing the dupe check
     # os.getpid() gets the current process' PID and writes it as a string to the slug PID file
